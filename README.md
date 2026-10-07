@@ -4,7 +4,7 @@ The EaglerLite API is a patch for Eaglercraft 1.12.2 that adds extensive hooks t
 
 ## What this repo has
 
-- `patcher.html` - injects the mod loader into any standalone Eaglercraft 1.12.2 offline HTML file. No mods are bundled; import them in-game (F6 or the Mods button). Imports persist for the patched file's origin. Only 1.12.2 offline clients are accepted.
+- `patcher.html` - injects the mod loader into any standalone Eaglercraft 1.12.2 offline HTML file. No mods are bundled; import them in-game (F6 or the Mods button).
 - `docs/` - self explanatory
 
 ## How to use the patcher
@@ -18,5 +18,5 @@ The EaglerLite API is a patch for Eaglercraft 1.12.2 that adds extensive hooks t
 
 - A mod is a single `.js` file containing `EL.registerMod`.
 - The in-game mod window imports `.js` mod files and `.json` mod bundles.
-- Imports stay imported through the browser's localStorage for that origin.
+- Imports stay imported through the browser's localStorage.
 

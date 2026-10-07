@@ -68,6 +68,7 @@ Returning `false` blocks an operation, returning a value rewrites it.
 - `onShader(fn)` - subscribe to `graphics:shader` (returns an unsubscribe function). Handler receives `{ source, type, rewritten }`, return a string (or assign `ev.source`) to replace the shader source (only sources longer than 40 characters pass through).
 - `onTexture(fn)` - subscribe to `graphics:texture` (returns an unsubscribe function, hooks to `texImage2D`/`texSubImage2D`). Handler receives `{ target, level, source, width?, height? }`, return a replacement (or assign `ev.source`) - it must be valid for textures, otherwise its ignored.
 - `onFrame(fn)` - subscribe to `graphics:frame` (returns an unsubscribe function), fires once per animation frame once the WebGL context exists.
+- `onContext(fn)` - runs `fn({ canvas, type, attrs })` right before the game creates its WebGL context (returns an unsubscribe function). Mutating `attrs` changes how the context gets made (`attrs.antialias = false`, `attrs.powerPreference = 'high-performance'`, that kind of thing). The game only makes its context once, so this has to be registered while the game hasn't booted yet for it to apply.
 - `gl()` - the captured WebGL context, or `null`, depending on what's happening onscreen.
 - `canvas()` - game canvas (fallback `EL.game.canvas()`).
 - `resolution()` - `{ width, height, scale, px }`: GUI dimensions (width and height), approximated scale (scale), exact pixel compared to GUI ratio (px).
@@ -110,8 +111,10 @@ for `api`, `api.hud.register`/`unregister` must prefix ids with `<mod id>:`.
 
 ## EL.performance
 
-- `fps()` - (kinda accurate) frames in the last second.
+- `fps()` - frames the game actually drew in the last second (counted off the game's own frame deliveries, not a side timer).
 - `frameMs()` - last frame difference from its previous frame.
+- `drawCalls()` - GL draw calls in the last frame.
+- `drawCallsTotal()` - every GL draw call since the context got made.
 - `uptime()` - how many ms since the API booted.
 - `every(ms, fn)` - frame timing, `ms` can't be lower than 50 (returns a stop function).
 
@@ -143,3 +146,9 @@ Per-mod config access and config panel stuff.
 ## Mod window
 
 The mod window lists mods with a search box, an enable option per mod, config options (if you spent the time to make them), and an Export button when the mod's source is stored. A mod must contain an `EL.registerMod` call, and new mods get applied to the game almost instantly.
+
+The window is styled like the game's own GUI now, bevels and all, and the config controls are vanilla-style too: ON/OFF buttons for bools, little `<` `>` steppers for numbers and choices.
+
+There's also an Arrange HUD button in the footer now. It closes the window and puts every HUD item into drag-arrange mode at once, so arranging your HUD doesn't need its own mod anymore.
+
+Enable/disable state persists between launches. In the EaglerLite client it goes through the client's mod store, in patched games it's plain localStorage.

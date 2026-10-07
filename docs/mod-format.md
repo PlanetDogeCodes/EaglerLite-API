@@ -16,7 +16,7 @@ A mod is one `.js` file that calls `EL.registerMod` when it loads.
 | `config` | array | config descriptors to be changed from the mod menu, see below |
 | `onConfig` | function | actions for config changes, see below |
 | `configScreen` | function | for the config UI, see below |
-| `enabled` | bool | default state of the mod (`false` = start disabled) |
+| `enabled` | bool | default state of the mod (`false` = start disabled). On/off state persists between launches now |
 
 ## init(api)
 
@@ -67,7 +67,7 @@ Replaces the regular Config controls with your own UI. `container` is a `div` an
 - `api.id` - the mod id
 - `api.enabled()` - current mod enabled state
 - `api.events.on` / `once` - skipped while the mod is disabled (values stay registered). Values from these handlers are forwarded from other in-game values, so most in-game events can be handled through `api.events` too.
-- `api.graphics.onShader` / `onTexture` / `onFrame` - rendering hooks that only work when the mod is enabled.
+- `api.graphics.onShader` / `onTexture` / `onFrame` / `onContext` - rendering hooks that only work when the mod is enabled.
 
 Everything else is shared with `window.EL`
 

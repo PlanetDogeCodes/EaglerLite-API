@@ -59,6 +59,7 @@ The frame event is `graphics:frame` if you were confused, and there actually isn
 
 | event | payload | notes |
 |---|---|---|
+| `graphics:context` | `{ gl, canvas, type }` | fires once when the game creates its WebGL context. `gl` is the same context `EL.graphics.gl()` hands out afterwards |
 | `graphics:shader` | `{ source, type, rewritten }` | (Rewritable) the shader type and source. Return a string or set `ev.source` to replace the shader source; `type` is `'vertex'`/`'fragment'` |
 | `graphics:texture` | `{ target, level, source, width, height }` | (Rewritable) the current texture pack/texture. You can return a replacement source or set `ev.source` but it must be an image/canvas/video/ImageBitmap/ArrayBuffer/typed array |
 | `graphics:frame` | `{ t }` | once per animation frame |
