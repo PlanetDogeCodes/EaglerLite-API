@@ -1,6 +1,9 @@
 # EaglerLite Mod API :D
 
-The EaglerLite API is a patch for Eaglercraft 1.12.2 that adds extensive hooks that mods can interact with for everything from gameplay to networking. I aim to one day make it as expansive as Fabric.
+### **DISCLAIMER**
+The EaglerLite Client and Mod API are **completely separate projects!** While the Mod API is included as a default patch for the EaglerLite client itself, the two projects are entirely iindependently maintained.
+
+The EaglerLite API is a patch for Eaglercraft 1.12.2 that adds extensive API hooks that mods can interact with for everything from gameplay to networking.
 
 ## What this repo has
 
