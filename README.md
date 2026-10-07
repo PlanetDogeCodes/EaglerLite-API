@@ -1,7 +1,7 @@
 # EaglerLite Mod API :D
 
 ### **DISCLAIMER**
-The EaglerLite Client and Mod API are **completely separate projects!** While the Mod API is included as a default patch for the EaglerLite client itself, the two projects are entirely iindependently maintained.
+The EaglerLite Client and Mod API are **completely separate projects!** While the Mod API is included as a default patch for the EaglerLite client itself, the two projects are entirely separately maintained.
 
 The EaglerLite API is a patch for Eaglercraft 1.12.2 that adds extensive API hooks that mods can interact with for everything from gameplay to networking.
 
