@@ -1,7 +1,11 @@
 <!-- Mod loader patcher (API v1.0)
 Give it a standalone Eaglercraft 1.12.2 offline HTML file and it returns the same
 game with the mod loader injected. No mods are bundled - import them in-game
-(F6 or the Mods button). Only 1.12.2 is supported.
+(F6 or the Mods button). Only 1.12.2 JS is currently supported (WASM support is planned but not a priority)
+
+BTW I'm really inneficient at coding so if you find a way to make this easier, open a pull request.
+
+And yes, the UI is vibecoded because I'm not spending time on that.
 -->
 <!DOCTYPE html>
 <html lang="en">
@@ -37,19 +41,19 @@ game with the mod loader injected. No mods are bundled - import them in-game
   <section>
     <h2>Input</h2>
     <div id="drop" tabindex="0">
-      <div class="big">Drop an Eaglercraft 1.12.2 offline HTML file here</div>
-      <div class="small">or click to choose - the file never leaves this page</div>
+      <div class="big">Drop an Eaglercraft 1.12.2 offline HTML file here - JS ONLY</div>
+      <div class="small">or click to choose</div>
     </div>
     <input type="file" id="file" accept=".html,.htm,text/html" style="display:none">
-    <p>Only standalone 1.12.2 offline clients are accepted. Other versions are rejected.</p>
+    <p>Only previously unmodified 1.12.2 JS clients are supported for now.</p>
   </section>
   <section>
     <h2>Output</h2>
     <div class="row">
-      <button class="primary" id="downloadBtn" type="button" disabled>Download patched HTML</button>
-      <button id="launchBtn" type="button" disabled>Launch patched copy</button>
+      <button class="primary" id="downloadBtn" type="button" disabled>Download Patched HTML :O</button>
+      <button id="launchBtn" type="button" disabled>Launch Patched HTML (MAY HAVE ISSUES, IT IS LOADED IN A BLOB LINK)</button>
     </div>
-    <div class="status" id="status">Waiting for a game file.</div>
+    <div class="status" id="status">Bruh just drop it here already</div>
   </section>
 </div>
 <script>
