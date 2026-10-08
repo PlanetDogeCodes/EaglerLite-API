@@ -1,10 +1,10 @@
 # API reference
 
-The API is currently v1.0. Most stuff is reachable from `window.EL` (window.EaglerLite) or per-mod `api`.
+The API is currently v1.0.1. Most stuff is reachable from `window.EL` (window.EaglerLite) or per-mod `api`.
 
 ## Global
 
-- `EL.version` - string, currently `'1.0.0'`.
+- `EL.version` - string, currently `'1.0.1'`.
 - `EL.boot` - boot config the loader was constructed with: `{ ver, opts, cfg, mods?, store? }`. `opts` may carry `relays`, `servers`, `joinServer`, `joinCode`, `lang`; `cfg` may carry `menuKey`, `inMenuMods`, `debug`.
 - `EL.mods` - currently registered mods (not on `api`).
 - `EL.log(msg)` - prints a timestamped line to a ring buffer, and mirrors to console when debug is on.
