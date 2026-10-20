@@ -1,4 +1,4 @@
-<!-- Mod loader patcher (API v1.0.1)
+<!-- Mod loader patcher (API v1.0.2)
 Give it a standalone Eaglercraft 1.12.2 offline HTML file and it returns the same
 game with the mod loader injected. No mods are bundled - import them in-game
 (F6 or the Mods button). Only 1.12.2 JS is currently supported (WASM support is planned but not a priority)
@@ -60,7 +60,7 @@ And yes, the UI is vibecoded because I'm not spending time on that.
 function EaglerLiteModAPI(BOOT) {
 'use strict';
 var EL = {};
-var OWN = '1.0.1';
+var OWN = '1.0.2';
 var _bootT = Date.now();
 EL.version = OWN;
 EL.boot = BOOT || {};
@@ -469,9 +469,128 @@ function postFrame(ts) {
     }
     return false;
   }
+  var ATTR_KNOWN = { 'generic.maxHealth': 1, 'generic.movementSpeed': 1, 'generic.attackDamage': 1, 'generic.followRange': 1, 'generic.armor': 1, 'generic.armorToughness': 1, 'generic.knockbackResistance': 1, 'generic.flyingSpeed': 1, 'generic.luck': 1, 'horse.jumpStrength': 1, 'zombie.spawnReinforcements': 1 };
+  function pgVar(b, i) {
+    var v = 0, s = 0, n = 0;
+    while (i < b.length && n < 5) {
+      var c = b[i]; i++; n++;
+      v += (c & 127) * Math.pow(2, s);
+      if (!(c & 128)) return [v, i];
+      s += 7;
+    }
+    return null;
+  }
+  function pgStr(b, i, max) {
+    var r = pgVar(b, i);
+    if (!r || r[0] > max || r[1] + r[0] > b.length) return null;
+    return [r[0], r[1] + r[0]];
+  }
+  function pgHex8(b, i) {
+    var s = '';
+    for (var q = 0; q < 8; q++) { var v = b[i + q] || 0; s += v < 16 ? '0' + v.toString(16) : v.toString(16); }
+    return s;
+  }
+  function pgAttrs(b) {
+    var r = pgVar(b, 1);
+    if (!r) return null;
+    var i = r[1];
+    if (i + 4 > b.length) return null;
+    var count = ((b[i] << 24) | (b[i + 1] << 16) | (b[i + 2] << 8) | b[i + 3]) >>> 0;
+    i += 4;
+    if (count > 64) return null;
+    var dirty = false;
+    var keep = [];
+    for (var a = 0; a < count; a++) {
+      var r2 = pgVar(b, i);
+      if (!r2 || r2[0] > 64 || r2[1] + r2[0] > b.length) break;
+      var from = i;
+      var vs = r2[1] + r2[0];
+      var key = '';
+      for (var q2 = r2[1]; q2 < vs; q2++) key += String.fromCharCode(b[q2]);
+      i = vs;
+      if (i + 8 > b.length) break;
+      var val = new DataView(b.buffer, b.byteOffset + i, 8).getFloat64(0, false);
+      i += 8;
+      var nv = val;
+      if (typeof nv !== 'number' || !isFinite(nv)) { nv = 0; dirty = true; }
+      else if (nv > 1e12) { nv = 1e12; dirty = true; }
+      else if (nv < -1e12) { nv = -1e12; dirty = true; }
+      else if (nv < 0 && !ATTR_KNOWN[key]) { nv = 0; dirty = true; }
+      var mr = pgVar(b, i);
+      if (!mr) break;
+      var mods = mr[0]; i = mr[1];
+      if (mods > 8) break;
+      var to = i + mods * 25;
+      if (to > b.length) break;
+      keep.push({ f: from, v: vs, t: to, val: nv });
+      i = to;
+    }
+    if (count > 0 && !keep.length) return null;
+    if (!dirty) return undefined;
+    var len = r[1] + 4;
+    for (var k = 0; k < keep.length; k++) len += keep[k].t - keep[k].f;
+    var nb = new Uint8Array(len);
+    var o = 0;
+    nb.set(b.subarray(0, r[1]), o); o += r[1];
+    var dv = new DataView(nb.buffer);
+    dv.setInt32(o, keep.length, false); o += 4;
+    for (var k2 = 0; k2 < keep.length; k2++) {
+      var c2 = keep[k2];
+      nb.set(b.subarray(c2.f, c2.v), o); o += c2.v - c2.f;
+      dv.setFloat64(o, c2.val, false); o += 8;
+      nb.set(b.subarray(c2.v + 8, c2.t), o); o += c2.t - c2.v - 8;
+    }
+    return nb.buffer;
+  }
+  function pgBoss(b) {
+    if (b.length < 18) return null;
+    var r = pgVar(b, 17);
+    if (!r || r[0] > 5) return null;
+    if (r[0] === 0 || r[0] === 3) {
+      if (!pgStr(b, r[1], 2048)) return null;
+    }
+    return undefined;
+  }
+  function pgIn(entry, ab) {
+    if (!entry.pg.play) {
+      if (ab.byteLength >= 1) {
+        var hb = new Uint8Array(ab);
+        if (hb[0] === 0x23) entry.pg.play = true;
+      }
+      return undefined;
+    }
+    var b = new Uint8Array(ab);
+    if (!b.length) return undefined;
+    var id = b[0];
+    if (id === 0x4e) return pgAttrs(b);
+    if (id === 0x0c) return pgBoss(b);
+    if (id === 0x0f) return b.length <= 8192 ? undefined : null;
+    if (id === 0x1f && b.length === 9) {
+      entry.pg.kas.push(pgHex8(b, 1));
+      if (entry.pg.kas.length > 64) entry.pg.kas.shift();
+    }
+    return undefined;
+  }
+  function pgOut(entry, ab) {
+    if (!entry.pg.play) return true;
+    var b = new Uint8Array(ab);
+    if (!b.length) return true;
+    if (b[0] > 0x2f) return false;
+    if (b[0] === 0x0b && b.length === 9) {
+      var k = pgHex8(b, 1);
+      var hit = false;
+      for (var i = 0; i < entry.pg.kas.length; i++) { if (entry.pg.kas[i] === k) { hit = true; break; } }
+      if (!hit) { entry.pg.desync = true; return false; }
+    }
+    return true;
+  }
+  function pgWarn(entry) {
+    try { emit('net:guard', { url: entry.url, bad: entry.pg.bad, desync: !!entry.pg.desync }); } catch (eW) {}
+  }
+
   function ELWS(uri, protos) {
     var s = (protos !== undefined) ? new Native(uri, protos) : new Native(uri);
-    var entry = { url: String(uri), opened: false, rx: 0, tx: 0, t: Date.now(), blocked: false };
+    var entry = { url: String(uri), opened: false, rx: 0, tx: 0, t: Date.now(), blocked: false, pg: { play: false, kas: [], bad: 0, desync: false } };
     sockets.push(entry);
     if (sockets.length > 40) sockets.shift();
     emit('net:open', { url: entry.url, socket: s });
@@ -485,6 +604,11 @@ function postFrame(ts) {
       s.addEventListener('open', function() { entry.opened = true; emit('net:connected', { url: entry.url }); });
       s.addEventListener('close', function(ev) { entry.opened = false; emit('net:close', { url: entry.url, code: ev && ev.code }); });
       s.addEventListener('message', function(ev) {
+        if (ev.data instanceof ArrayBuffer && ev.data.byteLength > 0) {
+          var gb = pgIn(entry, ev.data);
+          if (gb === null) { entry.pg.bad++; pgWarn(entry); try { ev.stopImmediatePropagation(); } catch (eG1) {} try { ev.preventDefault(); } catch (eG2) {} return; }
+          if (gb && gb !== ev.data) { try { Object.defineProperty(ev, 'data', { value: gb, configurable: true }); } catch (eG3) {} }
+        }
         entry.rx += (ev.data && ev.data.byteLength !== undefined) ? ev.data.byteLength : (ev.data ? String(ev.data).length : 0);
         var list = _handlers['net:message'];
         if (list && list.length) {
@@ -503,8 +627,11 @@ function postFrame(ts) {
       s.addEventListener('error', function() { emit('net:error', { url: entry.url }); });
     } catch (e4) {}
     var origSend = s.send.bind(s);
-    s.send = function(data) {
+    s.send = cloakFn(function(data) {
       var out = data;
+      if (data instanceof ArrayBuffer && data.byteLength > 0) {
+        if (!pgOut(entry, data)) { entry.pg.bad++; pgWarn(entry); return 0; }
+      }
       var list = _handlers['net:send'];
       if (list && list.length) {
         var payload = { url: entry.url, data: data };
@@ -517,7 +644,7 @@ function postFrame(ts) {
       }
       entry.tx += (out && out.byteLength !== undefined) ? out.byteLength : (out ? String(out).length : 0);
       return origSend(out);
-    };
+    }, origSend);
     return s;
   }
   try { for (var k in Native) { ELWS[k] = Native[k]; } } catch (e5) {}
@@ -1560,27 +1687,27 @@ function winStyle() {
   css.textContent = '#el-modwin{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:430px;max-width:94%;max-height:84%;display:flex;flex-direction:column;background:#c6c6c6;border:2px solid;border-color:#fefefe #565656 #565656 #fefefe;box-shadow:0 0 0 2px #000;pointer-events:auto;z-index:2147483600;padding:5px}'
     + '#el-modwin *{box-sizing:border-box}'
     + '#el-modwin ::-webkit-scrollbar{width:12px}'
-    + '#el-modwin ::-webkit-scrollbar-track{background:#7d7d7d}'
-    + '#el-modwin ::-webkit-scrollbar-thumb{background:#c6c6c6;border:1px solid #4d4d4d}'
+    + '#el-modwin ::-webkit-scrollbar-track{background:#3c3c3c}'
+    + '#el-modwin ::-webkit-scrollbar-thumb{background:#9a9a9a;border:1px solid #2f2f2f}'
     + '#el-modwin .el-mw-head{display:flex;align-items:center;gap:8px;padding:4px 6px 6px}'
     + '#el-modwin .el-mw-spacer{flex:1}'
-    + '#el-modwin .el-mw-search{margin:0 4px 6px;background:#000;color:#e0e0e0;border:2px solid;border-color:#373737 #fff #fff #373737;box-shadow:0 0 0 1px #8b8b8b;padding:4px 8px;font:12px monospace;outline:none;width:calc(100% - 8px)}'
+    + '#el-modwin .el-mw-search{margin:0 4px 6px;background:#000;color:#ffffff;border:2px solid;border-color:#000 #5a5a5a #5a5a5a #000;box-shadow:0 0 0 1px #6f6f6f;padding:4px 8px;font:12px monospace;outline:none;width:calc(100% - 8px)}'
     + '#el-modwin .el-mw-search::placeholder{color:#8b8b8b}'
-    + '#el-modwin .el-mw-list{overflow-y:auto;padding:4px;flex:1;min-height:60px;background:#8b8b8b;border:2px solid;border-color:#373737 #fff #fff #373737;scrollbar-width:thin;scrollbar-color:#c6c6c6 #7d7d7d}'
+    + '#el-modwin .el-mw-list{overflow-y:auto;padding:4px;flex:1;min-height:60px;background:#151517;border:2px solid;border-color:#000 #5a5a5a #5a5a5a #000;scrollbar-width:thin;scrollbar-color:#9a9a9a #3c3c3c}'
     + '#el-modwin .el-mw-row{padding:4px 6px;margin-bottom:4px;position:relative}'
-    + '#el-modwin .el-mw-row:hover{background:rgba(255,255,255,0.35)}'
-    + '#el-modwin .el-mw-row.cfgopen{outline:2px solid #fff;background:rgba(255,255,255,0.25)}'
+    + '#el-modwin .el-mw-row:hover{background:rgba(255,255,255,0.09)}'
+    + '#el-modwin .el-mw-row.cfgopen{outline:2px solid #fff;background:rgba(255,255,255,0.07)}'
     + '#el-modwin .el-mw-main{display:flex;align-items:center;gap:8px}'
     + '#el-modwin .el-mw-namewrap{flex:1;min-width:0;display:flex;align-items:center;overflow:hidden;line-height:0}'
     + '#el-modwin .el-mw-actions{display:flex;gap:4px;flex-shrink:0}'
     + '#el-modwin .el-mw-desc{margin-top:3px;line-height:0}'
     + '#el-modwin .el-mw-err{margin-top:3px;line-height:0}'
-    + '#el-modwin .el-mw-cfg{display:none;margin-top:4px;padding:6px;background:#b5b5b5;border:2px solid;border-color:#373737 #fff #fff #373737}'
+    + '#el-modwin .el-mw-cfg{display:none;margin-top:4px;padding:6px;background:#d2d2d2;border:2px solid;border-color:#373737 #fff #fff #373737}'
     + '#el-modwin .el-mw-cfg.open{display:block}'
     + '#el-modwin .el-mw-cfg-row{display:flex;align-items:center;gap:6px;margin-bottom:6px}'
     + '#el-modwin .el-mw-cfg-row .el-mw-clabel{flex-shrink:0;min-width:40%;line-height:0}'
     + '#el-modwin .el-mw-cfg-row .el-mw-cstep{display:flex;align-items:center;gap:4px;flex:1;justify-content:flex-end;line-height:0}'
-    + '#el-modwin .el-mw-cfg-row input[type=text]{flex:1;min-width:0;background:#000;color:#e0e0e0;border:2px solid;border-color:#373737 #fff #fff #373737;box-shadow:0 0 0 1px #8b8b8b;padding:4px 8px;font:12px monospace;outline:none}'
+    + '#el-modwin .el-mw-cfg-row input[type=text]{flex:1;min-width:0;background:#000;color:#ffffff;border:2px solid;border-color:#373737 #fff #fff #373737;box-shadow:0 0 0 1px #6f6f6f;padding:4px 8px;font:12px monospace;outline:none}'
     + '#el-modwin .el-mw-cfg-row .el-mw-swatch{width:18px;height:18px;border:2px solid;border-color:#373737 #fff #fff #373737;flex-shrink:0}'
     + '#el-modwin .el-mw-empty{padding:14px;text-align:center;line-height:0}'
     + '#el-modwin .el-mw-foot{padding:8px 2px 2px;display:flex;gap:8px;align-items:center;flex-wrap:wrap}'
@@ -1610,11 +1737,11 @@ function buildWindow() {
   w.id = 'el-modwin';
   var head = document.createElement('div');
   head.className = 'el-mw-head';
-  var titleT = mcTextEl('Mods', { color: '#3f3f3f' });
-  var badgeT = mcTextEl('', { color: '#7b7b7b' });
+  var titleT = mcTextEl('Mods', { color: '#2b2b2b', shadow: true });
+  var badgeT = mcTextEl('', { color: '#4a4a4a', shadow: true });
   var spacer = document.createElement('span');
   spacer.className = 'el-mw-spacer';
-  var apiT = mcTextEl('API v' + OWN, { color: '#7b7b7b' });
+  var apiT = mcTextEl('API v' + OWN, { color: '#4a4a4a', shadow: true });
   head.appendChild(titleT.el); head.appendChild(badgeT.el); head.appendChild(spacer); head.appendChild(apiT.el);
   w.appendChild(head);
   var search = document.createElement('input');
@@ -1642,7 +1769,7 @@ function buildWindow() {
   btns.appendChild(bImport.el); btns.appendChild(bExport.el); btns.appendChild(bArrange.el); btns.appendChild(bDone.el);
   var hint = document.createElement('span');
   hint.className = 'el-mw-hint';
-  var hintT = mcTextEl('F6 toggles this window', { color: '#7b7b7b' });
+  var hintT = mcTextEl('F6 toggles this window', { color: '#4a4a4a', shadow: true });
   hint.appendChild(hintT.el);
   foot.appendChild(btns); foot.appendChild(hint);
   w.appendChild(foot);
@@ -1675,7 +1802,7 @@ function buildWindow() {
 function cfgControl(mod, d) {
   var row = document.createElement('div');
   row.className = 'el-mw-cfg-row';
-  var lab = mcTextEl(d.label, { color: '#3f3f3f' });
+  var lab = mcTextEl(d.label, { color: '#1e1e1e', shadow: true });
   var labWrap = document.createElement('div');
   labWrap.className = 'el-mw-clabel';
   labWrap.appendChild(lab.el);
@@ -1693,7 +1820,7 @@ function cfgControl(mod, d) {
   } else if (d.type === 'number') {
     var stepW = document.createElement('div');
     stepW.className = 'el-mw-cstep';
-    var valT = mcTextEl(String(val), { color: '#3f3f3f' });
+    var valT = mcTextEl(String(val), { color: '#1e1e1e', shadow: true });
     function cur() { var v = Number(cfgValue(mod, d.key)); return isNaN(v) ? 0 : v; }
     function bump(dir) {
       var st = (typeof d.step === 'number' && d.step > 0) ? d.step : 1;
@@ -1722,7 +1849,7 @@ function cfgControl(mod, d) {
       for (var i = 0; i < opts.length; i++) { if (opts[i].value === v) return i; }
       return 0;
     }
-    var labT = mcTextEl(opts.length ? opts[curIdx()].label : '', { color: '#3f3f3f' });
+    var labT = mcTextEl(opts.length ? opts[curIdx()].label : '', { color: '#1e1e1e', shadow: true });
     try {
       var mw = 4;
       for (var mwI = 0; mwI < opts.length; mwI++) { var wv = mcTextWidth(opts[mwI].label); if (wv > mw) mw = wv; }
@@ -1808,8 +1935,8 @@ function renderWinList() {
       var nameWrap = document.createElement('div');
       nameWrap.className = 'el-mw-namewrap';
       var nameT = mcTextEl([
-        { t: mod.name, color: mod.enabled ? '#3f3f3f' : '#8b8b8b' },
-        { t: ' ' + mod.version + (mod.author ? ' by ' + mod.author : ''), color: '#7b7b7b' }
+        { t: mod.name, color: mod.enabled ? '#ffffff' : '#8f8f8f', shadow: true },
+        { t: ' ' + mod.version + (mod.author ? ' by ' + mod.author : ''), color: '#a8a8a8' }
       ]);
       nameWrap.appendChild(nameT.el);
       main.appendChild(nameWrap);
@@ -1842,13 +1969,13 @@ function renderWinList() {
       if (mod.description) {
         var desc = document.createElement('div');
         desc.className = 'el-mw-desc';
-        desc.appendChild(mcTextEl(mod.description, { color: '#7b7b7b' }).el);
+        desc.appendChild(mcTextEl(mod.description, { color: '#b0b0b0' }).el);
         row.appendChild(desc);
       }
       if (mod.error) {
         var err = document.createElement('div');
         err.className = 'el-mw-err';
-        err.appendChild(mcTextEl('error: ' + mod.error, { color: '#a03030' }).el);
+        err.appendChild(mcTextEl('error: ' + mod.error, { color: '#ff5555' }).el);
         row.appendChild(err);
       }
       var cfgEl = document.createElement('div');
@@ -1860,7 +1987,7 @@ function renderWinList() {
   if (!n) {
     var empty = document.createElement('div');
     empty.className = 'el-mw-empty';
-    empty.appendChild(mcTextEl(EL.mods.length ? 'no mods match the search' : 'no mods installed - use Import Mod', { color: '#3f3f3f' }).el);
+    empty.appendChild(mcTextEl(EL.mods.length ? 'no mods match the search' : 'no mods installed - use Import Mod', { color: '#d8d8d8' }).el);
     list.appendChild(empty);
   }
   _winEls.badge.set('(' + EL.mods.length + (EL.mods.length === 1 ? ' mod' : ' mods') + ')');
@@ -2031,27 +2158,25 @@ function persistImported(rec) {
     return;
   }
   {
-
     var ok = false;
     try {
       var raw = window.localStorage.getItem(EL.boot.store.key);
-      if (raw) {
-        var st = JSON.parse(raw);
-        if (st && Array.isArray(st.mods)) {
-          var f2 = false;
-          var keep = null;
-          for (var j = 0; j < st.mods.length; j++) { if (st.mods[j].id === rec.id) { keep = st.mods[j].enabled; f2 = true; } }
-          if (keep === true || keep === false) rec.enabled = keep;
-          for (var j2 = 0; j2 < st.mods.length; j2++) { if (st.mods[j2].id === rec.id) { st.mods[j2] = rec; break; } }
-          if (!f2) st.mods.push(rec);
-          window.localStorage.setItem(EL.boot.store.key, JSON.stringify(st));
-          ok = true;
-        }
-      }
+      var st = null;
+      try { st = raw ? JSON.parse(raw) : null; } catch (eP) { st = null; }
+      if (!st || !Array.isArray(st.mods)) st = { schema: 1, mods: [] };
+      var f2 = false;
+      var keep = null;
+      for (var j = 0; j < st.mods.length; j++) { if (st.mods[j].id === rec.id) { keep = st.mods[j].enabled; f2 = true; } }
+      if (keep === true || keep === false) rec.enabled = keep;
+      for (var j2 = 0; j2 < st.mods.length; j2++) { if (st.mods[j2].id === rec.id) { st.mods[j2] = rec; break; } }
+      if (!f2) st.mods.push(rec);
+      window.localStorage.setItem(EL.boot.store.key, JSON.stringify(st));
+      ok = true;
     } catch (e1) {}
     if (!ok) { try { if (window.opener) window.opener.postMessage({ type: 'el:mod-import', mod: rec }, '*'); } catch (e2) {} }
   }
 }
+
 function importOneMod(rec, stats) {
   var code = String((rec && rec.code) || '');
   if (!code) throw new Error('empty');
@@ -2488,7 +2613,13 @@ emit('el:ready', { version: OWN, mods: EL.mods.length });
 EL.log('EaglerLite Mod API v' + OWN + ' ready (' + EL.mods.length + ' mods)');
 return EL;
 }
-var PATCH_BOOT = {"ver": "3.0.1", "opts": {"servers": []}, "cfg": {"menuKey": "F6", "inMenuMods": true}};
+
+var _elog = function(m) { try { if (localStorage.getItem('eaglerLiteDebug') === '1') console.log(m); } catch (_) {} };
+var MODS_KEY = 'eaglerLiteMods_v1';
+var SERVERS_KEY = 'eaglerLiteServers_v1';
+var PENDING_JOIN_KEY = 'eaglerLitePendingJoin_v1';
+
+var PATCH_BOOT = {"ver": "3.0.2", "opts": {"servers": []}, "cfg": {"menuKey": "F6", "inMenuMods": true}};
 
 (function () {
   var drop = document.getElementById('drop');

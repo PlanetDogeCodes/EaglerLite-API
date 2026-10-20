@@ -54,6 +54,7 @@ The frame event is `graphics:frame` if you were confused, and there actually isn
 | `net:message` | `{ url, data }` | (Rewritable and Blockable) inbound network frame; `data` is the raw frame (string or ArrayBuffer); blocking stops the game from seeing it while rewriting it redefines `event.data` |
 | `net:send` | `{ url, data }` | (Rewritable and Blockable) outbound network frame; blocking stops it from sending and rewriting replaces the raw frame (string or ArrayBuffer) |
 | `net:blocked` | `{ url, dir }` | `dir: 'out'` happens when a blocked URL was refused at open (`EL.net.block`), `dir: 'in'` is when a `net:send` handler dropped a frame on purpose |
+| `net:guard` | `{ url, bad, desync }` | the built-in packet guard dropped a frame from a 1.21+ server that the 1.12.2 client couldn't safely read (`bad` = how many so far). Happens a lot around withers sitting in water on modern servers. you can't rewrite anything here, it's just a heads-up |
 
 ## Graphics
 
